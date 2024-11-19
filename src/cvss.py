@@ -91,7 +91,7 @@ class CVSSVector:
         "012201": 6.3,
         "012211": 2.9,
         "012221": 1.7,
-        "100000": 9.8,
+        "100000": 9.7,
         "100001": 9.5,
         "100010": 9.4,
         "100011": 8.7,
@@ -530,6 +530,7 @@ class CVSSVector:
         # If not found, return 'X'
         return 'X'
 
+
     def compute_severity_distances(self, max_vector):
         severity_distances = {}
         for eq in ['eq1', 'eq2', 'eq3eq6', 'eq4', 'eq5']:
@@ -539,8 +540,10 @@ class CVSSVector:
                 selected_value = self.__get_metric_value(metric)
                 max_value = self.extract_metric_value(metric, max_vector)
                 levels = self.metric_levels.get(metric, {})
-                distance += levels.get(selected_value, 0) - \
-                    levels.get(max_value, 0)
+                difference = levels.get(max_value, 0) - \
+                    levels.get(selected_value, 0)
+                if difference > 0:
+                    distance += difference
             severity_distances[eq] = distance
         return severity_distances
 
@@ -665,6 +668,10 @@ class CVSSVector:
             mean_distance = 0
 
         adjusted_score = value - mean_distance
+
+        if adjusted_score > value:
+            adjusted_score = value
+
         if adjusted_score < 0:
             adjusted_score = 0.0
         if adjusted_score > 10:
