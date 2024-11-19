@@ -2,7 +2,7 @@ import re
 
 from cvss import CVSSv4
 from nvd import Nvd
-from src.utils import dict_to_vector, trim_cvss_vector, vector_to_dict
+from utils import dict_to_vector, vector_to_dict
 
 questions = {
     "MAV": {
@@ -213,9 +213,9 @@ def main() -> None:
     print("\n### Final Report ###")
     print(f"CVE                   : {cve_id}")
     print(f"CVSS Version          : {cvss_version}")
-    print(f"Base Vector           : {trim_cvss_vector(base_vector)}")
+    print(f"Base Vector           : {base_vector}")
     print(f"Base Score            : {base_score}")
-    print(f"Tailored Vector       : {trim_cvss_vector(new_cvss.get_vector())}")
+    print(f"Tailored Vector       : {new_cvss.get_vector()}")
     print(f"Tailored Nomenclature : {new_cvss.get_nomenclature()}")
     print(f"Tailored Score        : {new_cvss.get_score()}")
     print(f"Tailored Severity     : {new_cvss.get_severity()}")

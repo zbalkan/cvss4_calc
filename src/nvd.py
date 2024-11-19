@@ -2,6 +2,8 @@ from typing import Optional
 
 import requests
 
+from utils import trim_cvss_vector
+
 
 class Nvd:
 
@@ -23,7 +25,8 @@ class Nvd:
             metrics = vulnerabilities[0].get("cve", {}).get("metrics", {})
             if "cvssMetricV40" in metrics:
                 primary_metric = metrics["cvssMetricV40"][0]["cvssData"]
-                vector_string = primary_metric.get("vectorString")
+                vector_string = trim_cvss_vector(primary_metric.get(
+                    "vectorString"))
                 base_score = primary_metric.get("baseScore")
                 print(
                     f"CVSS 4.0 Base Vector: {vector_string} | Base Score: {base_score}")

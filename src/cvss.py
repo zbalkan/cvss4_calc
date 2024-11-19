@@ -1,5 +1,7 @@
 from typing import Any
 
+from utils import trim_cvss_vector
+
 
 class CVSSv4:
 
@@ -381,7 +383,7 @@ class CVSSv4:
     }
 
     def __init__(self, vector_string: str) -> None:
-        self.__vector_string = vector_string
+        self.__vector_string = trim_cvss_vector(vector_string)
         self.__metrics: dict[str, str] = {}
         self.__parse_vector()
         self.__macro_vector_result = self.__compute_macro_vector()
