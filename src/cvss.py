@@ -345,6 +345,38 @@ class CVSSVector:
         "U": ["X", "Clear", "Green", "Amber", "Red"],
     }
 
+    max_composed = {
+        # EQ1
+        "eq1": {
+            0: ["AV:N/PR:N/UI:N/"],
+            1: ["AV:A/PR:N/UI:N/", "AV:N/PR:L/UI:N/", "AV:N/PR:N/UI:P/"],
+            2: ["AV:P/PR:N/UI:N/", "AV:A/PR:L/UI:P/"]
+        },
+        # EQ2
+        "eq2": {
+            0: ["AC:L/AT:N/"],
+            1: ["AC:H/AT:N/", "AC:L/AT:P/"]
+        },
+        # EQ3+EQ6
+        "eq3eq6": {
+            0: {0: ["VC:H/VI:H/VA:H/CR:H/IR:H/AR:H/"], 1: ["VC:H/VI:H/VA:L/CR:M/IR:M/AR:H/", "VC:H/VI:H/VA:H/CR:M/IR:M/AR:M/"]},
+            1: {0: ["VC:L/VI:H/VA:H/CR:H/IR:H/AR:H/", "VC:H/VI:L/VA:H/CR:H/IR:H/AR:H/"], 1: ["VC:L/VI:H/VA:L/CR:H/IR:M/AR:H/", "VC:L/VI:H/VA:H/CR:H/IR:M/AR:M/", "VC:H/VI:L/VA:H/CR:M/IR:H/AR:M/", "VC:H/VI:L/VA:L/CR:M/IR:H/AR:H/", "VC:L/VI:L/VA:H/CR:H/IR:H/AR:M/"]},
+            2: {1: ["VC:L/VI:L/VA:L/CR:H/IR:H/AR:H/"]},
+        },
+        # EQ4
+        "eq4": {
+            0: ["SC:H/SI:S/SA:S/"],
+            1: ["SC:H/SI:H/SA:H/"],
+            2: ["SC:L/SI:L/SA:L/"]
+        },
+        # EQ5
+        "eq5": {
+            0: ["E:A/"],
+            1: ["E:P/"],
+            2: ["E:U/"],
+        },
+    }
+
     def __init__(self, vector_string: str) -> None:
         self.__vector_string = vector_string
         self.__metrics = {}
@@ -476,72 +508,109 @@ class CVSSVector:
         macro_vector = eq1 + eq2 + eq3 + eq4 + eq5 + eq6
         return macro_vector
 
-    def __calculate_score(self) -> float:
-        # Step 1: Retrieve Base Score
-        value = self.cvss_lookup_global.get(self.__macro_vector_result, None)
-        if value is None:
-            raise ValueError("Macro Vector code not found in lookup table")
-
-        # Step 2: Compute Severity Distances
-        severity_distances = {}
-
-        # Assign severity distances for each metric
-        def __get_severity_distance(metric, selected_value, highest_value):
-            levels = self.metric_levels.get(metric, {})
-            return levels.get(selected_value, 0) - levels.get(highest_value, 0)
-
-        # Highest possible values in the Macro Vector (to be determined)
-        # For simplicity, we'll assume the highest severity levels
-        highest_metrics = {
-            "AV": "N",
-            "PR": "N",
-            "UI": "N",
-            "AC": "L",
-            "AT": "N",
-            "VC": "H",
-            "VI": "H",
-            "VA": "H",
-            "SC": "H",
-            "SI": "S",
-            "SA": "S",
-            "CR": "H",
-            "IR": "H",
-            "AR": "H",
-            "E": "A"
+    def get_eq_metrics(self, eq):
+        eq_metrics = {
+            'eq1': ['AV', 'PR', 'UI'],
+            'eq2': ['AC', 'AT'],
+            'eq3eq6': ['VC', 'VI', 'VA', 'CR', 'IR', 'AR'],
+            'eq4': ['SC', 'SI', 'SA'],
+            'eq5': ['E'],
         }
+        return eq_metrics.get(eq, [])
 
-        # Compute severity distances for relevant metrics
-        severity_distances['eq1'] = sum([
-            __get_severity_distance("AV", self.__get_metric_value("AV"), highest_metrics["AV"]),
-            __get_severity_distance("PR", self.__get_metric_value("PR"), highest_metrics["PR"]),
-            __get_severity_distance("UI", self.__get_metric_value("UI"), highest_metrics["UI"])
-        ])
+    def extract_metric_value(self, metric, vector):
+        # Extract the value of a metric from the vector string
+        pairs = vector.strip('/').split('/')
+        for pair in pairs:
+            if ':' not in pair:
+                continue
+            m, value = pair.split(':', 1)
+            if m == metric:
+                return value
+        # If not found, return 'X'
+        return 'X'
 
-        severity_distances['eq2'] = sum([
-            __get_severity_distance("AC", self.__get_metric_value("AC"), highest_metrics["AC"]),
-            __get_severity_distance("AT", self.__get_metric_value("AT"), highest_metrics["AT"])
-        ])
+    def compute_severity_distances(self, max_vector):
+        severity_distances = {}
+        for eq in ['eq1', 'eq2', 'eq3eq6', 'eq4', 'eq5']:
+            metrics = self.get_eq_metrics(eq)
+            distance = 0
+            for metric in metrics:
+                selected_value = self.__get_metric_value(metric)
+                max_value = self.extract_metric_value(metric, max_vector)
+                levels = self.metric_levels.get(metric, {})
+                distance += levels.get(selected_value, 0) - \
+                    levels.get(max_value, 0)
+            severity_distances[eq] = distance
+        return severity_distances
 
-        severity_distances['eq3eq6'] = sum([
-            __get_severity_distance("VC", self.__get_metric_value("VC"), highest_metrics["VC"]),
-            __get_severity_distance("VI", self.__get_metric_value("VI"), highest_metrics["VI"]),
-            __get_severity_distance("VA", self.__get_metric_value("VA"), highest_metrics["VA"]),
-            __get_severity_distance("CR", self.__get_metric_value("CR"), highest_metrics["CR"]),
-            __get_severity_distance("IR", self.__get_metric_value("IR"), highest_metrics["IR"]),
-            __get_severity_distance("AR", self.__get_metric_value("AR"), highest_metrics["AR"])
-        ])
+    def is_vector_greater_or_equal(self, max_vector) -> bool:
+        # Compare each metric in the selected vector to the max_vector
+        for metric in self.metric_levels.keys():
+            selected_value = self.__get_metric_value(metric)
+            max_value = self.extract_metric_value(metric, max_vector)
+            levels = self.metric_levels.get(metric, {})
+            if levels.get(selected_value, 0) < levels.get(max_value, 0):
+                return False
+        return True
 
-        severity_distances['eq4'] = sum([
-            __get_severity_distance("SC", self.__get_metric_value("SC"), highest_metrics["SC"]),
-            __get_severity_distance("SI", self.__get_metric_value("SI"), highest_metrics["SI"]),
-            __get_severity_distance("SA", self.__get_metric_value("SA"), highest_metrics["SA"])
-        ])
+    def find_max_vector(self, max_vectors):
+        for max_vector in max_vectors:
+            # Check if the max_vector is greater than or equal to the selected vector
+            if self.is_vector_greater_or_equal(max_vector):
+                return max_vector
+        # If none found, return the first max_vector
+        return max_vectors[0]
 
-        severity_distances['eq5'] = __get_severity_distance("E", self.__get_metric_value("E"), highest_metrics["E"])
+    def get_max_vectors(self):
+        # For each EQ, get the maximal metric combinations
+        eq_maxes = {}
+        for eq in ['eq1', 'eq2', 'eq3eq6', 'eq4', 'eq5']:
+            if eq == 'eq3eq6':
+                eq3 = int(self.__macro_vector_result[2])
+                eq6 = int(self.__macro_vector_result[5])
+                eq_maxes[eq] = self.max_composed['eq3eq6'][eq3][eq6]
+            else:
+                eq_index = int(eq[-1]) - 1
+                eq_value = int(self.__macro_vector_result[eq_index])
+                eq_maxes[eq] = self.max_composed[eq][eq_value]
+        # Compose the maximal vectors by combining the maximal metrics
+        from itertools import product
+        max_vectors = []
+        combinations = product(*eq_maxes.values())
+        for combo in combinations:
+            vector_parts = []
+            for part in combo:
+                vector_parts.extend(part.strip('/').split('/'))
+            vector = '/'.join(vector_parts)
+            max_vectors.append(vector)
+        return max_vectors
 
-        # Step 3: Calculate Available Distances
+    def compute_normalized_severity(self, severity_distances, available_distances):
+        normalized_severity = {}
+        n_existing_lower = 0
+        for eq in ['eq1', 'eq2', 'eq3eq6', 'eq4', 'eq5']:
+            if eq == 'eq3eq6':
+                eq3 = int(self.__macro_vector_result[2])
+                eq6 = int(self.__macro_vector_result[5])
+                max_severity_eq_value = self.max_severity[eq][eq3][eq6]
+            else:
+                index = int(self.__macro_vector_result[int(eq[-1]) - 1])
+                max_severity_eq_value = self.max_severity[eq][index]
+
+            max_severity_eq = max_severity_eq_value * 0.1
+
+            if available_distances.get(eq) and max_severity_eq > 0:
+                proportion = severity_distances[eq] / max_severity_eq
+                normalized_severity[eq] = available_distances[eq] * proportion
+                n_existing_lower += 1
+            else:
+                normalized_severity[eq] = 0
+
+        return normalized_severity, n_existing_lower
+
+    def calculate_available_distances(self, value):
         available_distances = {}
-
         eq1 = int(self.__macro_vector_result[0])
         available_distances['eq1'] = self.max_severity['eq1'].get(eq1, 0)
 
@@ -559,31 +628,39 @@ class CVSSVector:
         eq5 = int(self.__macro_vector_result[4])
         available_distances['eq5'] = self.max_severity['eq5'].get(eq5, 0)
 
-        # Step 4: Compute Proportional Severity Distances
-        normalized_severity = {}
-        n_existing_lower = 0
-        for eq in ['eq1', 'eq2', 'eq3eq6', 'eq4', 'eq5']:
-            if eq == 'eq3eq6':
-                # For 'eq3eq6', we need to access both eq3 and eq6
-                eq3 = int(self.__macro_vector_result[2])
-                eq6 = int(self.__macro_vector_result[5])
-                max_severity_eq_value = self.max_severity[eq][eq3][eq6]
-            else:
-                index = int(self.__macro_vector_result[int(eq[-1]) - 1])
-                max_severity_eq_value = self.max_severity[eq][index]
+        return available_distances
 
-            max_severity_eq = max_severity_eq_value * 0.1
+    def __calculate_score(self) -> float:
+        # Step 1: Retrieve Base Score
+        value = self.cvss_lookup_global.get(self.__macro_vector_result, None)
+        if value is None:
+            raise ValueError("Macro Vector code not found in lookup table")
 
-            if available_distances.get(eq) and max_severity_eq > 0:
-                proportion = severity_distances[eq] / max_severity_eq
-                normalized_severity[eq] = available_distances[eq] * proportion
-                n_existing_lower += 1
-            else:
-                normalized_severity[eq] = 0
+        # Exception for no impact on system (shortcut)
+        impact_metrics = ["VC", "VI", "VA", "SC", "SI", "SA"]
+        if all(self.__get_metric_value(metric) == "N" for metric in impact_metrics):
+            return 0.0
 
-        # Step 5: Adjust the Score
+        # Step 2: Get Maximal Vectors
+        max_vectors = self.get_max_vectors()
+
+        # Step 3: Find the Max Vector to Use
+        max_vector = self.find_max_vector(max_vectors)
+
+        # Step 4: Compute Severity Distances
+        severity_distances = self.compute_severity_distances(max_vector)
+
+        # Step 5: Calculate Available Distances
+        available_distances = self.calculate_available_distances(value)
+
+        # Step 6: Compute Proportional Severity Distances
+        normalized_severity, n_existing_lower = self.compute_normalized_severity(
+            severity_distances, available_distances)
+
+        # Step 7: Adjust the Score
         if n_existing_lower > 0:
-            mean_distance = sum(normalized_severity.values()) / n_existing_lower
+            mean_distance = sum(
+                normalized_severity.values()) / n_existing_lower
         else:
             mean_distance = 0
 

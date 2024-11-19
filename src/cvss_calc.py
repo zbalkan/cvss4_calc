@@ -6,21 +6,7 @@ import requests
 from cvss import CVSSVector
 
 
-def get_yes_no_input(prompt: str) -> bool:
-    """
-    Helper function to get validated yes/no input from the user.
-    """
-    while True:
-        response: str = input(prompt).strip().lower()
-        if response in ["y", "yes"]:
-            return True
-        elif response in ["n", "no"]:
-            return False
-        else:
-            print("Invalid input. Please enter 'Y' or 'N'.")
-
-
-def get_metric_input(metric_name: str, question: str, default: str, options: dict) -> str:
+def __get_metric_input(metric_name: str, question: str, default: str, options: dict) -> str:
     """
     Helper function to get input for a specific metric with a default value.
     """
@@ -40,87 +26,125 @@ def get_metric_input(metric_name: str, question: str, default: str, options: dic
             print("Invalid input. Please select from the available options.")
 
 
-def determine_attack_vector(default: str) -> str:
+def determine_m_attack_vector() -> str:
     options = {
         "N": {"description": "Network (exploited via a remote network, e.g., the Internet)."},
         "A": {"description": "Adjacent (limited to a logically adjacent topology, e.g., Bluetooth)."},
         "L": {"description": "Local (requires local access or login)."},
         "P": {"description": "Physical (requires physical access to the device)."},
+        "X": {"description": "Not Defined."},
     }
-    return get_metric_input(
-        "Attack Vector (AV)",
+    return __get_metric_input(
+        "Modified Attack Vector (MAV)",
         "Where can the attacker exploit the vulnerability?",
-        default,
+        'X',
         options,
     )
 
 
-def determine_attack_complexity(default: str) -> str:
+def determine_m_attack_complexity() -> str:
     options = {
         "L": {"description": "Low (no specialized conditions required)."},
         "H": {"description": "High (requires overcoming extra controls)."},
+        "X": {"description": "Not Defined."},
     }
-    return get_metric_input(
+    return __get_metric_input(
         "Attack Complexity (AC)",
         "How complex is the attack?",
-        default,
+        'X',
         options,
     )
 
 
-def determine_privileges_required(default: str) -> str:
+def determine_m_attack_requirements() -> str:
+    options = {
+        "N": {"description": "None (The successful attack does not depend on the deployment and execution conditions of the vulnerable system)"},
+        "P": {"description": "Present (The successful attack depends on the presence of specific deployment and execution conditions)"},
+        "X": {"description": "Not Defined."},
+    }
+    return __get_metric_input(
+        "Modified Attack Requirements (MAT)",
+        "How complex is the attack?",
+        'X',
+        options,
+    )
+
+def determine_m_privileges_required() -> str:
     options = {
         "N": {"description": "None (no privileges required)."},
         "L": {"description": "Low (user-level privileges required)."},
         "H": {"description": "High (administrator-level privileges required)."},
+        "X": {"description": "Not Defined."},
     }
-    return get_metric_input(
-        "Privileges Required (PR)",
+    return __get_metric_input(
+        "Privileges Required (MPR)",
         "What privileges does the attacker need?",
-        default,
+        'X',
         options,
     )
 
 
-def determine_user_interaction(default: str) -> str:
+def determine_m_user_interaction() -> str:
     options = {
         "N": {"description": "None (no user interaction required)."},
         "P": {"description": "Passive (limited user interaction required)."},
         "A": {"description": "Active (requires targeted user interaction)."},
+        "X": {"description": "Not Defined."},
     }
-    return get_metric_input(
-        "User Interaction (UI)",
+    return __get_metric_input(
+        "User Interaction (MUI)",
         "Does the attack require user interaction?",
-        default,
+        'X',
         options,
     )
 
-
-def determine_impact(metric_name: str, default: str) -> str:
+def determine_vuln_sys_impact(metric_name: str) -> str:
     options = {
         "N": {"description": "None (no impact)."},
         "L": {"description": "Low (limited impact)."},
         "H": {"description": "High (serious impact)."},
+        "X": {"description": "Not Defined."},
     }
-    return get_metric_input(
-        f"{metric_name} Impact",
-        f"How does the vulnerability impact {metric_name.lower()}?",
-        default,
+    return __get_metric_input(
+        f"Vulnerable System {metric_name} Impact",
+        f"How does the vulnerability impact {metric_name.lower()} of vulnerable system(s)?",
+        'X',
         options,
     )
 
 
-def determine_environmental_requirement(metric_name: str, default: str) -> str:
-    """
-    Prompt the user to provide the environmental requirement for a given metric.
+def determine_sub_sys_confidentiality() -> str:
+    options = {
+        "N": {"description": "Negligible (no impact)."},
+        "L": {"description": "Low (limited impact)."},
+        "H": {"description": "High (serious impact)."},
+        "X": {"description": "Not Defined."},
+    }
+    return __get_metric_input(
+        f"Subsequent System Confidentiality Impact",
+        f"How does the vulnerability impact confidentiality of subsequent system(s)?",
+        'X',
+        options,
+    )
 
-    Parameters:
-        metric_name (str): The name of the metric (e.g., "Confidentiality").
-        default (str): The default value for the metric (typically 'X').
 
-    Returns:
-        str: The selected value ('L', 'M', 'H', or 'X').
-    """
+def determine_sub_sys_impact(metric_name: str) -> str:
+    options = {
+        "N": {"description": "Negligible (no impact)."},
+        "L": {"description": "Low (limited impact)."},
+        "H": {"description": "High (serious impact)."},
+        "S": {"description": "Safety (OT/ICS, human life at risk)."},
+        "X": {"description": "Not Defined."},
+    }
+    return __get_metric_input(
+        f"Subsequent System {metric_name} Impact",
+        f"How does the vulnerability impact {metric_name.lower()} of subsequent system(s)?",
+        'X',
+        options,
+    )
+
+
+def determine_environmental_sec_requirement(metric_name: str) -> str:
     options = {
         "L": {"description": "Low (minimal importance)."},
         "M": {"description": "Medium (moderate importance)."},
@@ -128,28 +152,25 @@ def determine_environmental_requirement(metric_name: str, default: str) -> str:
         "X": {"description": "Not Defined."},
     }
 
-    return get_metric_input(
-        f"{metric_name} Requirement",
+    return __get_metric_input(
+        f"Environmental Security Requirement: {metric_name}",
         f"How important is {metric_name.lower()} to your environment?",
-        default,
+        'X',
         options,
     )
 
 
-def determine_exploit_maturity(default: str) -> str:
-    """
-    Prompt the user to select the Exploit Maturity (E) value.
-    """
+def determine_exploit_maturity() -> str:
     options = {
         "X": {"description": "Not Defined."},
-        "P": {"description": "Proof-of-Concept exists (reduced likelihood of exploitation)."},
-        "F": {"description": "Functional exploit exists (moderate likelihood of exploitation)."},
-        "H": {"description": "High likelihood of exploitation."},
+        "A": {"description": "Attacked (known exploitation)."},
+        "P": {"description": "POC (Proof-of-Concept exists, no knowledge of exploit attempts)."},
+        "U": {"description": "Unreported (No known POC or exploitation)."},
     }
-    return get_metric_input(
+    return __get_metric_input(
         "Exploit Maturity (E)",
-        "What is the maturity level of available exploits?",
-        default,
+        "What is the status of exploitation accorfing to threat intel?",
+        'X',
         options,
     )
 
@@ -195,23 +216,34 @@ def update_cvss_vector(base_vector: str) -> CVSSVector:
     """
     vector_dict = dict(item.split(":") for item in base_vector.split("/")[1:])
 
-    # Update metrics
-    vector_dict["AV"] = determine_attack_vector(vector_dict["AV"])
-    vector_dict["AC"] = determine_attack_complexity(vector_dict["AC"])
-    vector_dict["PR"] = determine_privileges_required(vector_dict["PR"])
-    vector_dict["UI"] = determine_user_interaction(vector_dict["UI"])
-    vector_dict["MVC"] = determine_impact("Confidentiality", vector_dict["VC"])
-    vector_dict["MVI"] = determine_impact("Integrity", vector_dict["VI"])
-    vector_dict["MVA"] = determine_impact("Availability", vector_dict["VA"])
+    # Update Environmental (Modified Base Metrics)
+    ## Exploitability Metrics
+    vector_dict["MAV"] = determine_m_attack_vector()
+    vector_dict["MAC"] = determine_m_attack_complexity()
+    vector_dict["MAT"] = determine_m_attack_requirements()
+    vector_dict["MPR"] = determine_m_privileges_required()
+    vector_dict["MUI"] = determine_m_user_interaction()
 
-    # Update environmental requirements
-    vector_dict["CR"] = determine_environmental_requirement(
-        "Confidentiality", vector_dict.get("CR", "X"))
-    vector_dict["IR"] = determine_environmental_requirement(
-        "Integrity", vector_dict.get("IR", "X"))
-    vector_dict["AR"] = determine_environmental_requirement(
-        "Availability", vector_dict.get("AR", "X"))
-    vector_dict["E"] = determine_exploit_maturity(vector_dict.get("E", "X"))
+    # Vulnerable System Impact Metrics
+    vector_dict["MVC"] = determine_vuln_sys_impact("Confidentiality")
+    vector_dict["MVI"] = determine_vuln_sys_impact("Integrity")
+    vector_dict["MVA"] = determine_vuln_sys_impact("Availability")
+
+    # Subsequent System Impact Metrics
+    vector_dict["MSC"] = determine_sub_sys_confidentiality()
+    vector_dict["MSI"] = determine_sub_sys_impact("Integrity")
+    vector_dict["MSA"] = determine_sub_sys_impact("Availability")
+
+    # Update Environmental (Security Requirements)
+    vector_dict["CR"] = determine_environmental_sec_requirement(
+        "Confidentiality")
+    vector_dict["IR"] = determine_environmental_sec_requirement(
+        "Integrity")
+    vector_dict["AR"] = determine_environmental_sec_requirement(
+        "Availability")
+
+    # Threat Metrics
+    vector_dict["E"] = determine_exploit_maturity()
 
     tailored_vector = "CVSS:4.0/" + \
         "/".join(f"{k}:{v}" for k, v in vector_dict.items())
@@ -219,6 +251,11 @@ def update_cvss_vector(base_vector: str) -> CVSSVector:
 
     return cvss_vector
 
+def clean_vector(vector:str) -> str:
+    """
+    Clean up the CVSS vector string by removing any whitespace and converting to uppercase.
+    """
+    return re.sub(r"\/(\w+:X)", "", vector)
 
 def main() -> None:
     print("### CVSS 4.0 Tailoring Tool ###")
@@ -240,9 +277,9 @@ def main() -> None:
     print("\n### Final Report ###")
     print(f"CVE: {cve_id}")
     print(f"CVSS Version: {cvss_version}")
-    print(f"Base Vector: {base_vector}")
+    print(f"Base Vector: {clean_vector(base_vector)}")
     print(f"Base Score: {base_score}")
-    print(f"Tailored Vector: {tailored_vector.get_vector_str()}")
+    print(f"Tailored Vector: {clean_vector(tailored_vector.get_vector_str())}")
     print(f"Tailored Nomenclature: {tailored_vector.get_nomenclature()}")
     print(f"Tailored Score: {tailored_vector.get_score()}")
     print(f"Tailored Severity: {tailored_vector.get_severity()}")
