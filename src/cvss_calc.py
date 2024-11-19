@@ -1,9 +1,7 @@
 import re
-from typing import Optional, Tuple
-
-import requests
 
 from cvss import CVSSVector
+from nvd import Nvd
 
 questions = {
     "MAV": {
@@ -210,38 +208,6 @@ def update_cvss_vector(base_vector: str) -> CVSSVector:
 
     return cvss_vector
 
-def fetch_cvss_base_vector(cve_id: str) -> Optional[Tuple[str, float, str]]:
-    """
-    Fetch the CVSS base vector for a given CVE ID from NVD.
-    """
-    print(f"Fetching CVSS base vector for {cve_id}...")
-    api_url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={cve_id}"
-    try:
-        response = requests.get(api_url, timeout=30)
-        response.raise_for_status()
-        data = response.json()
-
-        vulnerabilities = data.get("vulnerabilities", [])
-        if not vulnerabilities:
-            print(f"No vulnerabilities found for {cve_id}.")
-            return None
-
-        metrics = vulnerabilities[0].get("cve", {}).get("metrics", {})
-        if "cvssMetricV40" in metrics:
-            primary_metric = metrics["cvssMetricV40"][0]["cvssData"]
-            vector_string = primary_metric.get("vectorString")
-            base_score = primary_metric.get("baseScore")
-            print(
-                f"CVSS 4.0 Base Vector: {vector_string} | Base Score: {base_score}")
-            return vector_string, base_score, "4.0"
-        else:
-            print(f"No CVSS 4.0 vector available for {cve_id}.")
-            return None
-
-    except requests.RequestException as e:
-        print(f"Error fetching CVSS data: {e}")
-        return None
-
 def clean_vector(vector:str) -> str:
     """
     Clean up the CVSS vector string by removing any whitespace and converting to uppercase.
@@ -257,7 +223,7 @@ def main() -> None:
         print("Invalid CVE ID format. Please enter a valid CVE ID (e.g., CVE-2024-1234).")
         return
 
-    base_data = fetch_cvss_base_vector(cve_id)
+    base_data = Nvd().get_cve(cve_id)
     if not base_data:
         print(f"Failed to fetch CVE data for {cve_id}. Exiting.")
         return
