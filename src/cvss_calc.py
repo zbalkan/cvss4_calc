@@ -6,10 +6,12 @@ import requests
 from cvss import CVSSVector
 
 
-def __get_metric_input(metric_name: str, question: str, default: str, options: dict) -> str:
+def __get_metric_input(metric_name: str, question: str, options: dict) -> str:
     """
     Helper function to get input for a specific metric with a default value.
     """
+
+    default = 'X'
     print(f"\n### {metric_name} ###")
     print(f"Default: {default}")
     for key, value in options.items():
@@ -37,7 +39,6 @@ def determine_m_attack_vector() -> str:
     return __get_metric_input(
         "Modified Attack Vector (MAV)",
         "Where can the attacker exploit the vulnerability?",
-        'X',
         options,
     )
 
@@ -51,7 +52,6 @@ def determine_m_attack_complexity() -> str:
     return __get_metric_input(
         "Attack Complexity (AC)",
         "How complex is the attack?",
-        'X',
         options,
     )
 
@@ -65,7 +65,6 @@ def determine_m_attack_requirements() -> str:
     return __get_metric_input(
         "Modified Attack Requirements (MAT)",
         "How complex is the attack?",
-        'X',
         options,
     )
 
@@ -79,7 +78,6 @@ def determine_m_privileges_required() -> str:
     return __get_metric_input(
         "Privileges Required (MPR)",
         "What privileges does the attacker need?",
-        'X',
         options,
     )
 
@@ -94,7 +92,6 @@ def determine_m_user_interaction() -> str:
     return __get_metric_input(
         "User Interaction (MUI)",
         "Does the attack require user interaction?",
-        'X',
         options,
     )
 
@@ -108,7 +105,6 @@ def determine_vuln_sys_impact(metric_name: str) -> str:
     return __get_metric_input(
         f"Vulnerable System {metric_name} Impact",
         f"How does the vulnerability impact {metric_name.lower()} of vulnerable system(s)?",
-        'X',
         options,
     )
 
@@ -123,7 +119,6 @@ def determine_sub_sys_confidentiality() -> str:
     return __get_metric_input(
         f"Subsequent System Confidentiality Impact",
         f"How does the vulnerability impact confidentiality of subsequent system(s)?",
-        'X',
         options,
     )
 
@@ -139,7 +134,6 @@ def determine_sub_sys_impact(metric_name: str) -> str:
     return __get_metric_input(
         f"Subsequent System {metric_name} Impact",
         f"How does the vulnerability impact {metric_name.lower()} of subsequent system(s)?",
-        'X',
         options,
     )
 
@@ -155,7 +149,6 @@ def determine_environmental_sec_requirement(metric_name: str) -> str:
     return __get_metric_input(
         f"Environmental Security Requirement: {metric_name}",
         f"How important is {metric_name.lower()} to your environment?",
-        'X',
         options,
     )
 
@@ -170,7 +163,6 @@ def determine_exploit_maturity() -> str:
     return __get_metric_input(
         "Exploit Maturity (E)",
         "What is the status of exploitation accorfing to threat intel?",
-        'X',
         options,
     )
 
