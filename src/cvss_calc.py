@@ -1,7 +1,8 @@
 import re
 
-from cvss import CVSSVector
+from cvss import CVSSv4
 from nvd import Nvd
+from src.utils import dict_to_vector, trim_cvss_vector, vector_to_dict
 
 questions = {
     "MAV": {
@@ -157,14 +158,7 @@ questions = {
     },
 }
 
-def vector_to_dict(base_vector: str) -> dict[str, str]:
-    return dict(item.split(":") for item in base_vector.split("/")[1:])
-
-def dict_to_vector(vector_dict: dict[str, str]) -> str:
-    return "CVSS:4.0/" + \
-        "/".join(f"{k}:{v}" for k, v in vector_dict.items())
-
-def iterate_questions(questions: dict, vector_dict:dict) -> dict:
+def iterate_questions(questions: dict, vector:str) -> str:
     """
     Loop through the questions dictionary, prompt the user for inputs,
     and update the vector dictionary with selected values.
@@ -173,6 +167,7 @@ def iterate_questions(questions: dict, vector_dict:dict) -> dict:
     - questions (dict): The dictionary containing the metrics, questions, and options.
     - vector_dict (dict): The dictionary to be updated with the user's input.
     """
+    vector_dict: dict[str, str] = vector_to_dict(vector)
     for metric, details in questions.items():
         # Display the metric title and question, along with available options
         print(f"\n\n### {details['title']} ###")
@@ -193,26 +188,7 @@ def iterate_questions(questions: dict, vector_dict:dict) -> dict:
                 break
             else:
                 print("Invalid input. Please select from the available options.")
-    return vector_dict
-
-def update_cvss_vector(base_vector: str) -> CVSSVector:
-    """
-    Prompt the user to update CVSS metrics for their specific environment and calculate the tailored score.
-
-    If no environmental metrics are defined (all 'X'), return the base score.
-    """
-    vector_dict = vector_to_dict(base_vector)
-    vector_dict = iterate_questions(questions, vector_dict)
-    tailored_vector = dict_to_vector(vector_dict)
-    cvss_vector = CVSSVector(tailored_vector)
-
-    return cvss_vector
-
-def clean_vector(vector:str) -> str:
-    """
-    Clean up the CVSS vector string by removing any whitespace and converting to uppercase.
-    """
-    return re.sub(r"\/(\w+:X)", "", vector)
+    return dict_to_vector(vector_dict)
 
 def main() -> None:
     print("### CVSS 4.0 Tailoring Tool ###")
@@ -229,17 +205,20 @@ def main() -> None:
         return
 
     base_vector, base_score, cvss_version = base_data
-    tailored_vector = update_cvss_vector(base_vector)
+
+    # Ask the questions and update the vector
+    new_vector = iterate_questions(questions, base_vector)
+    new_cvss = CVSSv4(new_vector)
 
     print("\n### Final Report ###")
     print(f"CVE                   : {cve_id}")
     print(f"CVSS Version          : {cvss_version}")
-    print(f"Base Vector           : {clean_vector(base_vector)}")
+    print(f"Base Vector           : {trim_cvss_vector(base_vector)}")
     print(f"Base Score            : {base_score}")
-    print(f"Tailored Vector       : {clean_vector(tailored_vector.get_vector_str())}")
-    print(f"Tailored Nomenclature : {tailored_vector.get_nomenclature()}")
-    print(f"Tailored Score        : {tailored_vector.get_score()}")
-    print(f"Tailored Severity     : {tailored_vector.get_severity()}")
+    print(f"Tailored Vector       : {trim_cvss_vector(new_cvss.get_vector())}")
+    print(f"Tailored Nomenclature : {new_cvss.get_nomenclature()}")
+    print(f"Tailored Score        : {new_cvss.get_score()}")
+    print(f"Tailored Severity     : {new_cvss.get_severity()}")
 
 if __name__ == "__main__":
     main()

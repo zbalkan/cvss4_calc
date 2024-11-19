@@ -1,7 +1,7 @@
 from typing import Any
 
 
-class CVSSVector:
+class CVSSv4:
 
     __cvss_lookup_global: dict[str, float] = {
         "000000": 10,
@@ -700,7 +700,7 @@ class CVSSVector:
         else:
             return "Critical"
 
-    def get_vector_str(self) -> str:
+    def get_vector(self) -> str:
         return self.__vector_string
 
     def get_nomenclature(self) -> str:
