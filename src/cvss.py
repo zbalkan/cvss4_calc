@@ -1,6 +1,9 @@
+from typing import Any
+
+
 class CVSSVector:
 
-    cvss_lookup_global = {
+    __cvss_lookup_global: dict[str, float] = {
         "000000": 10,
         "000001": 9.9,
         "000010": 9.8,
@@ -274,7 +277,7 @@ class CVSSVector:
     }
 
     # Max severity distances
-    max_severity = {
+    __max_severity: dict[str, Any] = {
         "eq1": {0: 1, 1: 4, 2: 5},
         "eq2": {0: 1, 1: 2},
         "eq3eq6": {
@@ -287,7 +290,7 @@ class CVSSVector:
     }
 
     # Metric levels for severity distances
-    metric_levels = {
+    __metric_levels: dict[str, dict[str, float]] = {
         "AV": {"N": 0.0, "A": 0.1, "L": 0.2, "P": 0.3},
         "PR": {"N": 0.0, "L": 0.1, "H": 0.2},
         "UI": {"N": 0.0, "P": 0.1, "A": 0.2},
@@ -306,7 +309,7 @@ class CVSSVector:
     }
 
     # Expected metric order and valid values
-    expected_metric_order = {
+    __expected_metric_order: dict[str, list[str]] = {
         # Base metrics
         "AV": ["N", "A", "L", "P"],
         "AC": ["L", "H"],
@@ -345,7 +348,7 @@ class CVSSVector:
         "U": ["X", "Clear", "Green", "Amber", "Red"],
     }
 
-    max_composed = {
+    __max_composed: dict[str, Any] = {
         # EQ1
         "eq1": {
             0: ["AV:N/PR:N/UI:N/"],
@@ -379,7 +382,7 @@ class CVSSVector:
 
     def __init__(self, vector_string: str) -> None:
         self.__vector_string = vector_string
-        self.__metrics = {}
+        self.__metrics: dict[str, str] = {}
         self.__parse_vector()
         self.__macro_vector_result = self.__compute_macro_vector()
         self.__score = self.__calculate_score()
@@ -392,17 +395,17 @@ class CVSSVector:
             vector_body = self.__vector_string
 
         # Split the vector into metric pairs
-        metric_pairs = vector_body.split('/')
+        metric_pairs: list[str] = vector_body.split('/')
 
         for pair in metric_pairs:
             if ':' not in pair:
                 continue
             metric, value = pair.split(':', 1)
             # Validate metric
-            if metric not in self.expected_metric_order:
+            if metric not in self.__expected_metric_order:
                 continue
             # Validate value
-            if value not in self.expected_metric_order[metric]:
+            if value not in self.__expected_metric_order[metric]:
                 continue
             self.__metrics[metric] = value
 
@@ -508,8 +511,8 @@ class CVSSVector:
         macro_vector = eq1 + eq2 + eq3 + eq4 + eq5 + eq6
         return macro_vector
 
-    def get_eq_metrics(self, eq):
-        eq_metrics = {
+    def __get_eq_metrics(self, eq: str) -> list[str]:
+        eq_metrics: dict[str, list[str]] = {
             'eq1': ['AV', 'PR', 'UI'],
             'eq2': ['AC', 'AT'],
             'eq3eq6': ['VC', 'VI', 'VA', 'CR', 'IR', 'AR'],
@@ -518,9 +521,9 @@ class CVSSVector:
         }
         return eq_metrics.get(eq, [])
 
-    def extract_metric_value(self, metric, vector):
+    def __extract_metric_value(self, metric: str, vector: str) -> str:
         # Extract the value of a metric from the vector string
-        pairs = vector.strip('/').split('/')
+        pairs: list[str] = vector.strip('/').split('/')
         for pair in pairs:
             if ':' not in pair:
                 continue
@@ -531,75 +534,75 @@ class CVSSVector:
         return 'X'
 
 
-    def compute_severity_distances(self, max_vector):
-        severity_distances = {}
+    def __compute_severity_distances(self, max_vector: str) -> dict[str, float]:
+        severity_distances: dict[str, float] = {}
         for eq in ['eq1', 'eq2', 'eq3eq6', 'eq4', 'eq5']:
-            metrics = self.get_eq_metrics(eq)
+            metrics = self.__get_eq_metrics(eq)
             distance = 0
             for metric in metrics:
-                selected_value = self.__get_metric_value(metric)
-                max_value = self.extract_metric_value(metric, max_vector)
-                levels = self.metric_levels.get(metric, {})
-                difference = levels.get(max_value, 0) - \
-                    levels.get(selected_value, 0)
+                selected_value: str = self.__get_metric_value(metric)
+                max_value: str = self.__extract_metric_value(metric, max_vector)
+                levels: dict[str, float] = self.__metric_levels.get(metric, {})
+                difference: float = levels.get(max_value, 0.0) - \
+                    levels.get(selected_value, 0.0)
                 if difference > 0:
                     distance += difference
             severity_distances[eq] = distance
         return severity_distances
 
-    def is_vector_greater_or_equal(self, max_vector) -> bool:
+    def __is_vector_greater_or_equal(self, max_vector: str) -> bool:
         # Compare each metric in the selected vector to the max_vector
-        for metric in self.metric_levels.keys():
-            selected_value = self.__get_metric_value(metric)
-            max_value = self.extract_metric_value(metric, max_vector)
-            levels = self.metric_levels.get(metric, {})
+        for metric in self.__metric_levels.keys():
+            selected_value: str = self.__get_metric_value(metric)
+            max_value: str = self.__extract_metric_value(metric, max_vector)
+            levels: dict[str, float] = self.__metric_levels.get(metric, {})
             if levels.get(selected_value, 0) < levels.get(max_value, 0):
                 return False
         return True
 
-    def find_max_vector(self, max_vectors):
+    def __find_max_vector(self, max_vectors: list[str]) -> str:
         for max_vector in max_vectors:
             # Check if the max_vector is greater than or equal to the selected vector
-            if self.is_vector_greater_or_equal(max_vector):
+            if self.__is_vector_greater_or_equal(max_vector):
                 return max_vector
         # If none found, return the first max_vector
         return max_vectors[0]
 
-    def get_max_vectors(self):
+    def __get_max_vectors(self) -> list[str]:
         # For each EQ, get the maximal metric combinations
-        eq_maxes = {}
+        eq_maxes: dict = {}
         for eq in ['eq1', 'eq2', 'eq3eq6', 'eq4', 'eq5']:
             if eq == 'eq3eq6':
                 eq3 = int(self.__macro_vector_result[2])
                 eq6 = int(self.__macro_vector_result[5])
-                eq_maxes[eq] = self.max_composed['eq3eq6'][eq3][eq6]
+                eq_maxes[eq] = self.__max_composed['eq3eq6'][eq3][eq6]
             else:
                 eq_index = int(eq[-1]) - 1
                 eq_value = int(self.__macro_vector_result[eq_index])
-                eq_maxes[eq] = self.max_composed[eq][eq_value]
+                eq_maxes[eq] = self.__max_composed[eq][eq_value]
         # Compose the maximal vectors by combining the maximal metrics
         from itertools import product
-        max_vectors = []
+        max_vectors: list[str] = []
         combinations = product(*eq_maxes.values())
         for combo in combinations:
-            vector_parts = []
+            vector_parts: list[str] = []
             for part in combo:
                 vector_parts.extend(part.strip('/').split('/'))
-            vector = '/'.join(vector_parts)
+            vector: str = '/'.join(vector_parts)
             max_vectors.append(vector)
         return max_vectors
 
-    def compute_normalized_severity(self, severity_distances, available_distances):
-        normalized_severity = {}
+    def __compute_normalized_severity(self, severity_distances: dict[str, float], available_distances: dict[str, float]) -> tuple[dict[str, float], int]:
+        normalized_severity: dict[str, float] = {}
         n_existing_lower = 0
         for eq in ['eq1', 'eq2', 'eq3eq6', 'eq4', 'eq5']:
             if eq == 'eq3eq6':
                 eq3 = int(self.__macro_vector_result[2])
                 eq6 = int(self.__macro_vector_result[5])
-                max_severity_eq_value = self.max_severity[eq][eq3][eq6]
+                max_severity_eq_value = self.__max_severity[eq][eq3][eq6]
             else:
                 index = int(self.__macro_vector_result[int(eq[-1]) - 1])
-                max_severity_eq_value = self.max_severity[eq][index]
+                max_severity_eq_value = self.__max_severity[eq][index]
 
             max_severity_eq = max_severity_eq_value * 0.1
 
@@ -612,52 +615,52 @@ class CVSSVector:
 
         return normalized_severity, n_existing_lower
 
-    def calculate_available_distances(self, value):
-        available_distances = {}
+    def __calculate_available_distances(self) -> dict[str, float]:
+        available_distances: dict[str, float] = {}
         eq1 = int(self.__macro_vector_result[0])
-        available_distances['eq1'] = self.max_severity['eq1'].get(eq1, 0)
+        available_distances['eq1'] = self.__max_severity['eq1'].get(eq1, 0.0)
 
         eq2 = int(self.__macro_vector_result[1])
-        available_distances['eq2'] = self.max_severity['eq2'].get(eq2, 0)
+        available_distances['eq2'] = self.__max_severity['eq2'].get(eq2, 0.0)
 
         eq3 = int(self.__macro_vector_result[2])
         eq6 = int(self.__macro_vector_result[5])
-        available_distances['eq3eq6'] = self.max_severity['eq3eq6'].get(
-            eq3, {}).get(eq6, 0)
+        available_distances['eq3eq6'] = self.__max_severity['eq3eq6'].get(
+            eq3, {}).get(eq6, 0.0)
 
         eq4 = int(self.__macro_vector_result[3])
-        available_distances['eq4'] = self.max_severity['eq4'].get(eq4, 0)
+        available_distances['eq4'] = self.__max_severity['eq4'].get(eq4, 0.0)
 
         eq5 = int(self.__macro_vector_result[4])
-        available_distances['eq5'] = self.max_severity['eq5'].get(eq5, 0)
+        available_distances['eq5'] = self.__max_severity['eq5'].get(eq5, 0.0)
 
         return available_distances
 
     def __calculate_score(self) -> float:
         # Step 1: Retrieve Base Score
-        value = self.cvss_lookup_global.get(self.__macro_vector_result, None)
+        value = self.__cvss_lookup_global.get(self.__macro_vector_result, None)
         if value is None:
             raise ValueError("Macro Vector code not found in lookup table")
 
         # Exception for no impact on system (shortcut)
-        impact_metrics = ["VC", "VI", "VA", "SC", "SI", "SA"]
+        impact_metrics: list[str] = ["VC", "VI", "VA", "SC", "SI", "SA"]
         if all(self.__get_metric_value(metric) == "N" for metric in impact_metrics):
             return 0.0
 
         # Step 2: Get Maximal Vectors
-        max_vectors = self.get_max_vectors()
+        max_vectors: list[str] = self.__get_max_vectors()
 
         # Step 3: Find the Max Vector to Use
-        max_vector = self.find_max_vector(max_vectors)
+        max_vector: str = self.__find_max_vector(max_vectors)
 
         # Step 4: Compute Severity Distances
-        severity_distances = self.compute_severity_distances(max_vector)
+        severity_distances: dict[str, float] = self.__compute_severity_distances(max_vector)
 
         # Step 5: Calculate Available Distances
-        available_distances = self.calculate_available_distances(value)
+        available_distances: dict[str, float] = self.__calculate_available_distances()
 
         # Step 6: Compute Proportional Severity Distances
-        normalized_severity, n_existing_lower = self.compute_normalized_severity(
+        normalized_severity, n_existing_lower = self.__compute_normalized_severity(
             severity_distances, available_distances)
 
         # Step 7: Adjust the Score
@@ -667,7 +670,7 @@ class CVSSVector:
         else:
             mean_distance = 0
 
-        adjusted_score = value - mean_distance
+        adjusted_score: float = value - mean_distance
 
         if adjusted_score > value:
             adjusted_score = value
@@ -678,7 +681,7 @@ class CVSSVector:
             adjusted_score = 10.0
 
         # Round the adjusted score to one decimal place
-        final_score = round(adjusted_score * 10) / 10.0
+        final_score: float = round(adjusted_score * 10) / 10.0
 
         return final_score
 
@@ -720,7 +723,7 @@ class CVSSVector:
             'MVC', 'MVI', 'MVA',
             'MSC', 'MSI', 'MSA'
         ]
-        has_environmental = any(
+        has_environmental: bool = any(
             self.__metrics.get(metric, 'X') != 'X' and self.__metrics.get(
                 metric) != 'X'
             for metric in environmental_metrics
