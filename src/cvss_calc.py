@@ -3,6 +3,8 @@ from typing import Optional, Tuple
 
 import requests
 
+from cvss import CVSSVector
+
 
 def get_yes_no_input(prompt: str) -> bool:
     """
@@ -108,6 +110,50 @@ def determine_impact(metric_name: str, default: str) -> str:
     )
 
 
+def determine_environmental_requirement(metric_name: str, default: str) -> str:
+    """
+    Prompt the user to provide the environmental requirement for a given metric.
+
+    Parameters:
+        metric_name (str): The name of the metric (e.g., "Confidentiality").
+        default (str): The default value for the metric (typically 'X').
+
+    Returns:
+        str: The selected value ('L', 'M', 'H', or 'X').
+    """
+    options = {
+        "L": {"description": "Low (minimal importance)."},
+        "M": {"description": "Medium (moderate importance)."},
+        "H": {"description": "High (critical importance)."},
+        "X": {"description": "Not Defined."},
+    }
+
+    return get_metric_input(
+        f"{metric_name} Requirement",
+        f"How important is {metric_name.lower()} to your environment?",
+        default,
+        options,
+    )
+
+
+def determine_exploit_maturity(default: str) -> str:
+    """
+    Prompt the user to select the Exploit Maturity (E) value.
+    """
+    options = {
+        "X": {"description": "Not Defined."},
+        "P": {"description": "Proof-of-Concept exists (reduced likelihood of exploitation)."},
+        "F": {"description": "Functional exploit exists (moderate likelihood of exploitation)."},
+        "H": {"description": "High likelihood of exploitation."},
+    }
+    return get_metric_input(
+        "Exploit Maturity (E)",
+        "What is the maturity level of available exploits?",
+        default,
+        options,
+    )
+
+
 def fetch_cvss_base_vector(cve_id: str) -> Optional[Tuple[str, float, str]]:
     """
     Fetch the CVSS base vector for a given CVE ID from NVD.
@@ -131,16 +177,9 @@ def fetch_cvss_base_vector(cve_id: str) -> Optional[Tuple[str, float, str]]:
             base_score = primary_metric.get("baseScore")
             print(
                 f"CVSS 4.0 Base Vector: {vector_string} | Base Score: {base_score}")
-            return "4.0", base_score, vector_string
-        elif "cvssMetricV31" in metrics:
-            primary_metric = metrics["cvssMetricV31"][0]["cvssData"]
-            vector_string = primary_metric.get("vectorString")
-            base_score = primary_metric.get("baseScore")
-            print(
-                f"CVSS 3.1 Base Vector: {vector_string} | Base Score: {base_score}")
-            return "3.1", base_score, vector_string
+            return vector_string, base_score, "4.0"
         else:
-            print(f"No CVSS vector available for {cve_id}.")
+            print(f"No CVSS 4.0 vector available for {cve_id}.")
             return None
 
     except requests.RequestException as e:
@@ -148,53 +187,41 @@ def fetch_cvss_base_vector(cve_id: str) -> Optional[Tuple[str, float, str]]:
         return None
 
 
-def calculate_environmental_score(base_score: float, components: dict) -> float:
-    """
-    Calculate the tailored (environmental) score based on the modified vector components.
-    """
-    impact_map = {"N": 0.0, "L": 0.22, "H": 0.56}
-
-    # Calculate modified impact
-    mc = impact_map[components["MVC"]]
-    mi = impact_map[components["MVI"]]
-    ma = impact_map[components["MVA"]]
-
-    modified_impact = 1 - (1 - mc) * (1 - mi) * (1 - ma)
-    modified_impact = max(modified_impact, 0)
-
-    # Adjust the base score using modified impact
-    environmental_score = base_score * modified_impact
-    return round(environmental_score, 1)
-
-
-def update_cvss_vector(base_vector: Optional[str], base_score: float) -> Optional[Tuple[str, float]]:
+def update_cvss_vector(base_vector: str) -> CVSSVector:
     """
     Prompt the user to update CVSS metrics for their specific environment and calculate the tailored score.
+
+    If no environmental metrics are defined (all 'X'), return the base score.
     """
-    if not base_vector:
-        print("No base vector found. Cannot proceed.")
-        return None
+    vector_dict = dict(item.split(":") for item in base_vector.split("/")[1:])
 
-    components = {item.split(":")[0]: item.split(":")[1]
-                  for item in base_vector.split("/")}
+    # Update metrics
+    vector_dict["AV"] = determine_attack_vector(vector_dict["AV"])
+    vector_dict["AC"] = determine_attack_complexity(vector_dict["AC"])
+    vector_dict["PR"] = determine_privileges_required(vector_dict["PR"])
+    vector_dict["UI"] = determine_user_interaction(vector_dict["UI"])
+    vector_dict["MVC"] = determine_impact("Confidentiality", vector_dict["VC"])
+    vector_dict["MVI"] = determine_impact("Integrity", vector_dict["VI"])
+    vector_dict["MVA"] = determine_impact("Availability", vector_dict["VA"])
 
-    print("\n### Tailoring CVSS Vector to Your Environment ###")
+    # Update environmental requirements
+    vector_dict["CR"] = determine_environmental_requirement(
+        "Confidentiality", vector_dict.get("CR", "X"))
+    vector_dict["IR"] = determine_environmental_requirement(
+        "Integrity", vector_dict.get("IR", "X"))
+    vector_dict["AR"] = determine_environmental_requirement(
+        "Availability", vector_dict.get("AR", "X"))
+    vector_dict["E"] = determine_exploit_maturity(vector_dict.get("E", "X"))
 
-    components["AV"] = determine_attack_vector(components["AV"])
-    components["AC"] = determine_attack_complexity(components["AC"])
-    components["PR"] = determine_privileges_required(components["PR"])
-    components["UI"] = determine_user_interaction(components["UI"])
-    components["MVC"] = determine_impact("Confidentiality", components["VC"])
-    components["MVI"] = determine_impact("Integrity", components["VI"])
-    components["MVA"] = determine_impact("Availability", components["VA"])
+    tailored_vector = "CVSS:4.0/" + \
+        "/".join(f"{k}:{v}" for k, v in vector_dict.items())
+    cvss_vector = CVSSVector(tailored_vector)
 
-    tailored_vector = "/".join(f"{k}:{v}" for k, v in components.items())
-    tailored_score = calculate_environmental_score(base_score, components)
-    return tailored_vector, tailored_score
+    return cvss_vector
 
 
 def main() -> None:
-    print("### CVSS Tailoring Tool ###")
+    print("### CVSS 4.0 Tailoring Tool ###")
     cve_id = input("Enter the CVE ID (e.g., CVE-2024-1234): ").strip()
 
     match = re.match(r"^CVE-\d{4}-\d{4,}$", cve_id)
@@ -207,19 +234,18 @@ def main() -> None:
         print(f"Failed to fetch CVE data for {cve_id}. Exiting.")
         return
 
-    cvss_version, base_score, base_vector = base_data
+    base_vector, base_score, cvss_version = base_data
+    tailored_vector = update_cvss_vector(base_vector)
 
-    tailored_data = update_cvss_vector(base_vector, base_score)
-    if tailored_data:
-        tailored_vector, tailored_score = tailored_data
-        print("\n### Final Report ###")
-        print(f"CVE: {cve_id}")
-        print(f"CVSS Version: {cvss_version}")
-        print(f"Base Score: {base_score}")
-        print(f"Base Vector: {base_vector}")
-        print(f"Tailored Vector: {tailored_vector}")
-        print(f"Tailored Score: {tailored_score}")
-
+    print("\n### Final Report ###")
+    print(f"CVE: {cve_id}")
+    print(f"CVSS Version: {cvss_version}")
+    print(f"Base Vector: {base_vector}")
+    print(f"Base Score: {base_score}")
+    print(f"Tailored Vector: {tailored_vector.get_vector_str()}")
+    print(f"Tailored Nomenclature: {tailored_vector.get_nomenclature()}")
+    print(f"Tailored Score: {tailored_vector.get_score()}")
+    print(f"Tailored Severity: {tailored_vector.get_severity()}")
 
 if __name__ == "__main__":
     main()
