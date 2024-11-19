@@ -9,7 +9,7 @@ def get_yes_no_input(prompt: str) -> bool:
     Helper function to get validated yes/no input from the user.
     """
     while True:
-        response = input(prompt).strip().lower()
+        response: str = input(prompt).strip().lower()
         if response in ["y", "yes"]:
             return True
         elif response in ["n", "no"]:
@@ -115,7 +115,7 @@ def fetch_cvss_base_vector(cve_id: str) -> Optional[Tuple[str, float, str]]:
     print(f"Fetching CVSS base vector for {cve_id}...")
     api_url = f"https://services.nvd.nist.gov/rest/json/cves/2.0?cveId={cve_id}"
     try:
-        response = requests.get(api_url, timeout=20)
+        response = requests.get(api_url, timeout=30)
         response.raise_for_status()
         data = response.json()
 
@@ -148,9 +148,28 @@ def fetch_cvss_base_vector(cve_id: str) -> Optional[Tuple[str, float, str]]:
         return None
 
 
-def update_cvss_vector(base_vector: Optional[str]) -> Optional[str]:
+def calculate_environmental_score(base_score: float, components: dict) -> float:
     """
-    Prompt the user to update CVSS metrics for their specific environment.
+    Calculate the tailored (environmental) score based on the modified vector components.
+    """
+    impact_map = {"N": 0.0, "L": 0.22, "H": 0.56}
+
+    # Calculate modified impact
+    mc = impact_map[components["MVC"]]
+    mi = impact_map[components["MVI"]]
+    ma = impact_map[components["MVA"]]
+
+    modified_impact = 1 - (1 - mc) * (1 - mi) * (1 - ma)
+    modified_impact = max(modified_impact, 0)
+
+    # Adjust the base score using modified impact
+    environmental_score = base_score * modified_impact
+    return round(environmental_score, 1)
+
+
+def update_cvss_vector(base_vector: Optional[str], base_score: float) -> Optional[Tuple[str, float]]:
+    """
+    Prompt the user to update CVSS metrics for their specific environment and calculate the tailored score.
     """
     if not base_vector:
         print("No base vector found. Cannot proceed.")
@@ -170,7 +189,8 @@ def update_cvss_vector(base_vector: Optional[str]) -> Optional[str]:
     components["MVA"] = determine_impact("Availability", components["VA"])
 
     tailored_vector = "/".join(f"{k}:{v}" for k, v in components.items())
-    return tailored_vector
+    tailored_score = calculate_environmental_score(base_score, components)
+    return tailored_vector, tailored_score
 
 
 def main() -> None:
@@ -189,15 +209,16 @@ def main() -> None:
 
     cvss_version, base_score, base_vector = base_data
 
-    tailored_vector = update_cvss_vector(base_vector)
-
-    if tailored_vector:
+    tailored_data = update_cvss_vector(base_vector, base_score)
+    if tailored_data:
+        tailored_vector, tailored_score = tailored_data
         print("\n### Final Report ###")
         print(f"CVE: {cve_id}")
         print(f"CVSS Version: {cvss_version}")
         print(f"Base Score: {base_score}")
         print(f"Base Vector: {base_vector}")
         print(f"Tailored Vector: {tailored_vector}")
+        print(f"Tailored Score: {tailored_score}")
 
 
 if __name__ == "__main__":
